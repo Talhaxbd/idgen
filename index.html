@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Card Editor (Mobile Responsive)</title>
+    <style>
+        /* CSS স্টাইল অপরিবর্তিত */
+        body { 
+            font-family: Arial, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: flex-start; 
+            gap: 20px; 
+            padding: 20px; 
+            flex-wrap: wrap;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+        .controls, .output { 
+            padding: 15px; 
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px; 
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+        .controls { 
+            flex: 1; 
+            min-width: 300px; 
+        }
+        .output {
+            flex: 1;
+            text-align: center;
+            min-width: 300px;
+        }
+        .controls label, .controls input, .controls button { 
+            display: block; 
+            margin-bottom: 10px; 
+        }
+        .controls input[type="text"] { 
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .controls button { 
+            padding: 10px 20px; 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            border-radius: 4px; 
+            width: 100%; 
+            margin-top: 5px;
+        }
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        #canvas { 
+            border: 1px solid black; 
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column; 
+                padding: 10px;
+            }
+            .controls, .output {
+                width: 100%;
+                min-width: unset;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h2>স্টুডেন্ট আইডি তৈরি করুন </h2>
+        
+        <label for="studentPhoto"> স্টুডেন্ট ফটো আপলোড করুন:</label>
+        <input type="file" id="studentPhoto" accept="image/*">
+        <hr>
+
+        <label for="studentId">Student ID:</label>
+        <input type="text" id="studentId" value="1234567890">
+
+        <label for="studentName">Name:</label>
+        <input type="text" id="studentName" value="Amir Ali">
+        <hr>
+
+        <button onclick="drawIDCard()">ছবি তৈরি করুন</button>
+        <button id="downloadBtn" style="display: none;">PNG ডাউনলোড করুন</button>
+    </div>
+
+    <div class="output">
+        <h2>ফলাফল</h2>
+        <canvas id="canvas" width="450" height="700"></canvas>
+    </div>
+
+    <script>
+        const TEMPLATE_URL = "https://i.ibb.co.com/xSssyfT2/20251017-013205.jpg";
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // টেক্সটের রঙ
+        const TEXT_COLOR = '#3E484A'; 
+        const FONT_STYLE = '32px Arial'; 
+        
+        // ওভারলে কালার (RGB 69, 67, 69) এবং 33% অপাসিটি (0.33)
+        const OVERLAY_COLOR = 'rgba(69, 67, 69, 0.33)'; 
+
+        // কোঅর্ডিনেট
+        const POSITIONS = {
+            STUDENT_ID: { x: 401, y: 780 },
+            NAME:       { x: 342, y: 825 },
+            PHOTO:      { 
+                x: 425,   
+                y: 595,   
+                width: 200,    
+                height: 260    
+            }
+        };
+
+        // টেমপ্লেট ছবিটি লোড করার ফাংশন
+        function loadTemplate() {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous"; 
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    resolve(img);
+                };
+                img.onerror = () => reject(new Error('টেমপ্লেট ইমেজ লোড হতে পারেনি।'));
+                img.src = TEMPLATE_URL;
+            });
+        }
+
+        // আইডি কার্ড তৈরি এবং রেন্ডার করার প্রধান ফাংশন
+        async function drawIDCard() {
+            try {
+                const templateImage = await loadTemplate();
+                
+                // ১. টেমপ্লেট আঁকা
+                ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+
+                const studentIdText = document.getElementById('studentId').value;
+                const studentNameText = document.getElementById('studentName').value;
+                const studentPhotoInput = document.getElementById('studentPhoto');
+                
+                // ২. স্টুডেন্ট ফটো বসানো এবং ঘোরানো (টেক্সট আঁকার আগে, যাতে ওভারলে সবকিছুর উপর পড়ে)
+                const photoPromise = new Promise(resolve => {
+                    if (studentPhotoInput.files.length > 0) {
+                        const photoFile = studentPhotoInput.files[0];
+                        const reader = new FileReader();
+                        
+                        reader.onload = function(event) {
+                            const photoImg = new Image();
+                            photoImg.onload = function() {
+                                const photoW = POSITIONS.PHOTO.width;
+                                const photoH = POSITIONS.PHOTO.height;
+                                
+                                ctx.save();
+                                ctx.translate(POSITIONS.PHOTO.x, POSITIONS.PHOTO.y);
+                                const angleInRadians = 1 * Math.PI / 180;
+                                ctx.rotate(angleInRadians);
+                                
+                                ctx.drawImage(
+                                    photoImg, 
+                                    -(photoW / 2), 
+                                    -(photoH / 2), 
+                                    photoW, 
+                                    photoH
+                                );
+                                
+                                ctx.restore();
+                                resolve();
+                            };
+                            photoImg.src = event.target.result;
+                        };
+                        reader.readAsDataURL(photoFile);
+                    } else {
+                        resolve(); // ছবি আপলোড না হলে পরের ধাপে চলে যাও
+                    }
+                });
+
+                await photoPromise; // ছবি আঁকা শেষ হওয়া পর্যন্ত অপেক্ষা করুন
+
+                // ৩. স্টুডেন্ট আইডি এবং নাম টেক্সট বসানো
+                ctx.fillStyle = TEXT_COLOR; 
+                ctx.font = FONT_STYLE;
+                
+                ctx.fillText(studentIdText, POSITIONS.STUDENT_ID.x, POSITIONS.STUDENT_ID.y);
+                ctx.fillText(studentNameText, POSITIONS.NAME.x, POSITIONS.NAME.y);
+                
+                // ৪. *** ওভারলে যোগ করা (সবকিছুর উপরে) ***
+                ctx.fillStyle = OVERLAY_COLOR;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                downloadBtn.style.display = 'block';
+
+            } catch (error) {
+                console.error("ছবি তৈরি করার সময় সমস্যা হয়েছে:", error);
+                alert("ছবি তৈরি করার সময় একটি সমস্যা হয়েছে। টেমপ্লেট লোড হয়েছে কি না দেখে নিন।");
+            }
+        }
+
+        // ডাউনলোড ফাংশন
+        downloadBtn.addEventListener('click', function() {
+            const imageURL = canvas.toDataURL('image/png');
+            
+            const link = document.createElement('a');
+            link.href = imageURL;
+            link.download = 'edited_id_card.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // প্রাথমিক অবস্থায় ডাউনলোড বাটনটি লুকিয়ে রাখা
+        downloadBtn.style.display = 'none';
+
+        // টেমপ্লেট লোড হলে প্রথমবার ক্যানভাসে দেখানোর জন্য
+        loadTemplate().catch(e => {
+            ctx.fillStyle = 'red';
+            ctx.font = '30px Arial';
+            ctx.fillText('টেমপ্লেট লোড হয়নি।', 10, 50);
+            console.error(e);
+        });
+    </script>
+</body>
+</html>
